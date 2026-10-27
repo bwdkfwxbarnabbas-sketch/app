@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VoiceScript - Audio Transcriber & Summarizer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        ios: {
+                            blue: '#007AFF',
+                            green: '#34C759',
+                            red: '#FF3B30',
+                            orange: '#FF9500',
+                            cardLight: '#F2F2F7',
+                            cardDark: '#1C1C1E',
+                            bgLight: '#FFFFFF',
+                            bgDark: '#000000',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* iOS-style Smooth Scroll & Touch Behaviors */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Pulse animation for active recording mic */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 0.4; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .recording-pulse {
+            animation: pulse-ring 2s infinite ease-in-out;
+        }
+
+        /* Audio Wave Visualizer Bars */
+        .wave-bar {
+            transition: height 0.1s ease;
+        }
+    </style>
+</head>
+<body class="bg-ios-bgLight dark:bg-ios-bgDark text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-200 flex flex-col justify-between">
+
+    <!-- Top Navigation Header -->
+    <header class="sticky top-0 z-40 backdrop-blur-md bg-white/75 dark:bg-black/75 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+            <div class="w-8 h-8 rounded-xl bg-ios-blue flex items-center justify-center text-white shadow-md">
+                <i class="fa-solid fa-[#007AFF] fa-microphone text-lg"></i>
+            </div>
+            <h1 class="text-xl font-bold tracking-tight">VoiceScript</h1>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <!-- PWA Help Button -->
+            <button id="pwaHelpBtn" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 text-sm flex items-center space-x-1" title="Add to iPhone Home Screen">
+                <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                <span class="text-xs font-semibold hidden sm:inline">Add to Home Screen</span>
+            </button>
+            <!-- Dark Mode Toggle -->
+            <button id="themeToggle" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300">
+                <i class="fa-solid fa-moon text-lg dark:hidden"></i>
+                <i class="fa-solid fa-sun text-lg hidden dark:block"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- PWA Install Modal / Instructions (iPhone iOS focus) -->
+    <div id="pwaModal" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-ios-cardDark rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-200 dark:border-gray-800">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold">Install as iOS Web App</h3>
+                <button id="closePwaModal" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <ol class="space-y-4 text-sm text-gray-600 dark:text-gray-300">
+                <li class="flex items-start space-x-3">
+                    <span class="bg-ios-blue text-white rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 font-semibold text-xs">1</span>
+                    <span>Open this page in <strong>Safari</strong> on your iPhone.</span>
+                </li>
+                <li class="flex items-start space-x-3">
+                    <span class="bg-ios-blue text-white rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 font-semibold text-xs">2</span>
+                    <span>Tap the <strong>Share button</strong> <i class="fa-solid fa-arrow-up-from-bracket text-ios-blue"></i> at the bottom of the screen.</span>
+                </li>
+                <li class="flex items-start space-x-3">
+                    <span class="bg-ios-blue text-white rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 font-semibold text-xs">3</span>
+                    <span>Scroll down and tap <strong>"Add to Home Screen"</strong> <i class="fa-regular fa-square-plus text-ios-blue"></i>.</span>
+                </li>
+                <li class="flex items-start space-x-3">
+                    <span class="bg-ios-blue text-white rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 font-semibold text-xs">4</span>
+                    <span>Launch directly from your home screen like a native app!</span>
+                </li>
+            </ol>
+            <button id="dismissPwaModal" class="mt-6 w-full py-2.5 bg-ios-blue text-white rounded-xl font-semibold shadow hover:opacity-90">Got it!</button>
+        </div>
+    </div>
+
+    <!-- Main Content Container -->
+    <main class="max-w-3xl w-full mx-auto p-4 space-y-6 flex-1">
+
+        <!-- Browser Support Banner Alert -->
+        <div id="supportWarning" class="hidden p-4 rounded-2xl bg-ios-orange/10 border border-ios-orange/30 text-ios-orange text-sm flex items-center space-x-3">
+            <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+            <div>
+                <span class="font-semibold">Speech Recognition Note:</span>
+                <p class="text-xs">Your browser might not support real-time speech recognition. For best results on iOS, use Safari or upload pre-recorded audio files below.</p>
+            </div>
+        </div>
+
+        <!-- Section 1: Audio Input (Live Mic or Audio File Upload) -->
+        <section class="bg-ios-cardLight dark:bg-ios-cardDark rounded-3xl p-6 shadow-sm border border-gray-200/50 dark:border-gray-800 flex flex-col items-center">
+            
+            <!-- Visual Waveform Visualizer -->
+            <div id="visualizer" class="flex items-center justify-center space-x-1 h-12 my-2 w-full max-w-xs">
+                <div class="wave-bar w-1.5 bg-ios-blue/30 rounded-full h-3"></div>
+                <div class="wave-bar w-1.5 bg-ios-blue/30 rounded-full h-6"></div>
+                <div class="wave-bar w-1.5 bg-ios-blue/30 rounded-full h-4"></div>
+                <div class="wave-bar w-1.5 bg-ios-blue/30 rounded-full h-8"></div>
+                <div class="wave-bar w-1.5 bg-ios-blue/30 rounded-full h-5"></div>
+                <div class="wave-bar w-1.5 bg-ios-blue/30 rounded-full h-2"></div>
+            </div>
+
+            <!-- Big Interactive Mic Button -->
+            <div class="relative my-4">
+                <div id="micRing" class="absolute inset-0 rounded-full bg-ios-blue/20 hidden"></div>
+                <button id="recordBtn" class="relative z-10 w-24 h-24 rounded-full bg-ios-blue text-white flex flex-col items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all">
+                    <i id="micIcon" class="fa-solid fa-microphone text-3xl mb-1"></i>
+                    <span id="recordStatus" class="text-xs font-semibold">Tap to Record</span>
+                </button>
+            </div>
+
+            <!-- Recording Timer -->
+            <div id="timer" class="text-sm font-mono text-gray-500 dark:text-gray-400 font-semibold mb-4">00:00</div>
+
+            <!-- OR Divider -->
+            <div class="flex items-center w-full my-2">
+                <div class="flex-1 border-t border-gray-300 dark:border-gray-700"></div>
+                <span class="px-3 text-xs text-gray-400 font-medium uppercase tracking-wider">or upload audio</span>
+                <div class="flex-1 border-t border-gray-300 dark:border-gray-700"></div>
+            </div>
+
+            <!-- File Upload Dropzone -->
+            <label for="audioFileInput" class="mt-2 w-full flex items-center justify-center px-4 py-3 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-ios-blue dark:hover:border-ios-blue cursor-pointer transition-colors group">
+                <div class="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400 group-hover:text-ios-blue">
+                    <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
+                    <span id="fileNameDisplay" class="font-medium">Choose .mp3, .wav, or .m4a file</span>
+                </div>
+                <input type="file" id="audioFileInput" accept="audio/*" class="hidden">
+            </label>
+            <audio id="audioPlayer" controls class="w-full mt-3 hidden rounded-xl"></audio>
+        </section>
+
+        <!-- Section 2: Transcript Box -->
+        <section class="bg-ios-cardLight dark:bg-ios-cardDark rounded-3xl p-6 shadow-sm border border-gray-200/50 dark:border-gray-800">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-quote-left text-ios-blue"></i>
+                    <h2 class="font-bold text-lg">Live Transcript</h2>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="clearBtn" class="px-3 py-1.5 text-xs font-medium text-ios-red hover:bg-ios-red/10 rounded-xl transition">
+                        <i class="fa-solid fa-trash mr-1"></i> Clear
+                    </button>
+                    <button id="copyTranscriptBtn" class="px-3 py-1.5 text-xs font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                        <i class="fa-regular fa-copy mr-1"></i> Copy
+                    </button>
+                </div>
+            </div>
+
+            <!-- Transcript Editable Container -->
+            <textarea id="transcriptText" rows="6" placeholder="Your transcribed speech or uploaded audio text will appear here in real-time... (or type directly to edit)" class="w-full p-4 rounded-2xl bg-white dark:bg-black border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-2 focus:ring-ios-blue text-sm leading-relaxed resize-y no-scrollbar"></textarea>
+            
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div class="text-xs text-gray-500 font-medium">
+                    Word Count: <span id="wordCount">0</span> words
+                </div>
+                <!-- Summarize Button Trigger -->
+                <button id="summarizeBtn" class="px-5 py-2.5 bg-ios-green text-white font-semibold rounded-xl text-sm shadow hover:opacity-90 active:scale-95 transition flex items-center space-x-2">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Generate Summary</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Section 3: Summary Output & Analytics -->
+        <section id="summarySection" class="hidden bg-ios-cardLight dark:bg-ios-cardDark rounded-3xl p-6 shadow-sm border border-gray-200/50 dark:border-gray-800 space-y-6">
+            
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-bolt text-ios-green text-xl"></i>
+                    <h2 class="font-bold text-lg">Smart Insights & Summary</h2>
+                </div>
+                <button id="copySummaryBtn" class="px-3 py-1.5 text-xs font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                    <i class="fa-regular fa-copy mr-1"></i> Copy Summary
+                </button>
+            </div>
+
+            <!-- Analytics Stats Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div class="p-3 bg-white dark:bg-black rounded-2xl border border-gray-200 dark:border-gray-800">
+                    <span class="text-xs text-gray-400 block font-medium">Sentiment</span>
+                    <span id="sentimentResult" class="text-sm font-bold text-ios-blue flex items-center mt-1">
+                        <i class="fa-regular fa-face-smile mr-1.5"></i> Neutral
+                    </span>
+                </div>
+                <div class="p-3 bg-white dark:bg-black rounded-2xl border border-gray-200 dark:border-gray-800">
+                    <span class="text-xs text-gray-400 block font-medium">Estimated Reading Time</span>
+                    <span id="readTimeResult" class="text-sm font-bold text-gray-700 dark:text-gray-200 mt-1 block">
+                        &lt; 1 min
+                    </span>
+                </div>
+                <div class="p-3 bg-white dark:bg-black rounded-2xl border border-gray-200 dark:border-gray-800 col-span-2 sm:col-span-1">
+                    <span class="text-xs text-gray-400 block font-medium">Processing Method</span>
+                    <span class="text-sm font-bold text-ios-green mt-1 flex items-center">
+                        <i class="fa-solid fa-shield-halved mr-1.5"></i> 100% On-Device
+                    </span>
+                </div>
+            </div>
+
+            <!-- Executive Summary -->
+            <div class="space-y-2">
+                <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider">Executive Summary</h3>
+                <div id="execSummary" class="p-4 bg-white dark:bg-black rounded-2xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed"></div>
+            </div>
+
+            <!-- Key Bullet Points -->
+            <div class="space-y-2">
+                <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider">Key Takeaways</h3>
+                <ul id="bulletPoints" class="space-y-2 text-sm"></ul>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- App Footer -->
+    <footer class="py-4 text-center text-xs text-gray-400 border-t border-gray-200/50 dark:border-gray-800/50">
+        VoiceScript &bull; Free On-Device Audio Transcriber & Summarizer
+    </footer>
+
+    <!-- Notification Toast Element -->
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-4 py-2.5 rounded-2xl text-xs font-semibold shadow-2xl transition-all duration-300 opacity-0 pointer-events-none z-50 flex items-center space-x-2">
+        <i class="fa-solid fa-circle-check text-ios-green"></i>
+        <span id="toastMsg">Action completed!</span>
+    </div>
+
+    <!-- Application JavaScript Logic -->
+    <script>
+        // DOM Elements
+        const themeToggle = document.getElementById('themeToggle');
+        const recordBtn = document.getElementById('recordBtn');
+        const micIcon = document.getElementById('micIcon');
+        const recordStatus = document.getElementById('recordStatus');
+        const micRing = document.getElementById('micRing');
+        const timerEl = document.getElementById('timer');
+        const transcriptText = document.getElementById('transcriptText');
+        const wordCountEl = document.getElementById('wordCount');
+        const clearBtn = document.getElementById('clearBtn');
+        const copyTranscriptBtn = document.getElementById('copyTranscriptBtn');
+        const summarizeBtn = document.getElementById('summarizeBtn');
+        const summarySection = document.getElementById('summarySection');
+        const execSummary = document.getElementById('execSummary');
+        const bulletPoints = document.getElementById('bulletPoints');
+        const sentimentResult = document.getElementById('sentimentResult');
+        const readTimeResult = document.getElementById('readTimeResult');
+        const copySummaryBtn = document.getElementById('copySummaryBtn');
+        const audioFileInput = document.getElementById('audioFileInput');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const pwaHelpBtn = document.getElementById('pwaHelpBtn');
+        const pwaModal = document.getElementById('pwaModal');
+        const closePwaModal = document.getElementById('closePwaModal');
+        const dismissPwaModal = document.getElementById('dismissPwaModal');
+        const supportWarning = document.getElementById('supportWarning');
+        const waveBars = document.querySelectorAll('.wave-bar');
+
+        // App State
+        let isRecording = false;
+        let recognition = null;
+        let timerInterval = null;
+        let secondsRecorded = 0;
+        let audioContext = null;
+        let analyser = null;
+        let micStream = null;
+        let animFrameId = null;
+
+        // --- 1. Theme Setup (Dark Mode) ---
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        themeToggle.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+        });
+
+        // --- 2. Toast Notifications ---
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = message;
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            toast.classList.add('opacity-100');
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0', 'pointer-events-none');
+            }, 2500);
+        }
+
+        // --- 3. Speech Recognition Engine Setup ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (!SpeechRecognition) {
+            supportWarning.classList.remove('hidden');
+        } else {
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript + ' ';
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                if (finalTranscript) {
+                    transcriptText.value += finalTranscript;
+                    updateWordCount();
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Speech Recognition Error:", event.error);
+                if(event.error === 'not-allowed') {
+                    showToast('Microphone permission denied.');
+                    stopRecording();
+                }
+            };
+
+            recognition.onend = () => {
+                if (isRecording) {
+                    // Auto restart recognition if user hasn't explicitly stopped recording
+                    try { recognition.start(); } catch(e) {}
+                }
+            };
+        }
+
+        // --- 4. Live Recording & Audio Visualizer ---
+        recordBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        });
+
+        async function startRecording() {
+            if (!recognition) {
+                showToast('Speech recognition not supported on this browser.');
+                return;
+            }
+
+            try {
+                // Request Mic permissions for audio visualizer
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                setupVisualizer(micStream);
+
+                recognition.start();
+                isRecording = true;
+                secondsRecorded = 0;
+                
+                // UI updates
+                recordStatus.innerText = "Stop";
+                micIcon.className = "fa-solid fa-square text-2xl mb-1";
+                recordBtn.className = "relative z-10 w-24 h-24 rounded-full bg-ios-red text-white flex flex-col items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all";
+                micRing.classList.remove('hidden');
+                micRing.classList.add('recording-pulse');
+
+                // Start Timer
+                timerInterval = setInterval(() => {
+                    secondsRecorded++;
+                    const mins = String(Math.floor(secondsRecorded / 60)).padStart(2, '0');
+                    const secs = String(secondsRecorded % 60).padStart(2, '0');
+                    timerEl.innerText = `${mins}:${secs}`;
+                }, 1000);
+
+            } catch (err) {
+                console.error("Microphone access error:", err);
+                showToast("Microphone access is required to record.");
+            }
+        }
+
+        function stopRecording() {
+            isRecording = false;
+            if (recognition) recognition.stop();
+            if (timerInterval) clearInterval(timerInterval);
+            if (micStream) micStream.getTracks().forEach(track => track.stop());
+            if (animFrameId) cancelAnimationFrame(animFrameId);
+
+            // Reset UI
+            recordStatus.innerText = "Tap to Record";
+            micIcon.className = "fa-solid fa-microphone text-3xl mb-1";
+            recordBtn.className = "relative z-10 w-24 h-24 rounded-full bg-ios-blue text-white flex flex-col items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all";
+            micRing.classList.add('hidden');
+            micRing.classList.remove('recording-pulse');
+            
+            // Reset wave visualizer height
+            waveBars.forEach(bar => bar.style.height = '8px');
+            showToast("Recording stopped.");
+        }
+
+        // Web Audio API Visualizer Setup
+        function setupVisualizer(stream) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+            analyser.fftSize = 32;
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            function drawVisualizer() {
+                if (!isRecording) return;
+                animFrameId = requestAnimationFrame(drawVisualizer);
+                analyser.getByteFrequencyData(dataArray);
+
+                waveBars.forEach((bar, index) => {
+                    const val = dataArray[index] || 0;
+                    const height = Math.max(6, (val / 255) * 40);
+                    bar.style.height = `${height}px`;
+                });
+            }
+            drawVisualizer();
+        }
+
+        // --- 5. File Upload Handling ---
+        audioFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                fileNameDisplay.innerText = file.name;
+                const fileURL = URL.createObjectURL(file);
+                audioPlayer.src = fileURL;
+                audioPlayer.classList.remove('hidden');
+                showToast("Audio loaded. Play file & use Live Record to transcribe!");
+            }
+        });
+
+        // --- 6. Text Logic & Utilities ---
+        transcriptText.addEventListener('input', updateWordCount);
+
+        function updateWordCount() {
+            const text = transcriptText.value.trim();
+            const words = text ? text.split(/\s+/).length : 0;
+            wordCountEl.innerText = words;
+        }
+
+        clearBtn.addEventListener('click', () => {
+            transcriptText.value = '';
+            updateWordCount();
+            summarySection.classList.add('hidden');
+            showToast("Transcript cleared.");
+        });
+
+        copyTranscriptBtn.addEventListener('click', () => {
+            if (!transcriptText.value.trim()) return;
+            copyToClipboard(transcriptText.value);
+            showToast("Transcript copied to clipboard!");
+        });
+
+        function copyToClipboard(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+        }
+
+        // --- 7. On-Device Local Summarization Engine ---
+        summarizeBtn.addEventListener('click', () => {
+            const text = transcriptText.value.trim();
+            if (!text || text.split(/\s+/).length < 5) {
+                showToast("Please transcribe or enter at least 5 words to summarize.");
+                return;
+            }
+
+            // Run NLP Extraction
+            const summaryData = generateLocalSummary(text);
+
+            // Populate UI
+            execSummary.innerText = summaryData.executiveSummary;
+            bulletPoints.innerHTML = summaryData.keyTakeaways.map(pt => 
+                `<li class="flex items-start space-x-2">
+                    <span class="text-ios-green font-bold">&bull;</span>
+                    <span>${pt}</span>
+                 </li>`
+            ).join('');
+
+            sentimentResult.innerHTML = `<i class="${summaryData.sentiment.icon} mr-1.5"></i> ${summaryData.sentiment.label}`;
+            sentimentResult.className = `text-sm font-bold flex items-center mt-1 ${summaryData.sentiment.color}`;
+
+            readTimeResult.innerText = `${summaryData.readingTime} min read`;
+
+            summarySection.classList.remove('hidden');
+            summarySection.scrollIntoView({ behavior: 'smooth' });
+            showToast("Summary generated locally!");
+        });
+
+        // Custom Algorithmic Summarization (TF-IDF Lite / Sentence Scoring)
+        function generateLocalSummary(text) {
+            // Clean sentences
+            const rawSentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+            const sentences = rawSentences.map(s => s.trim()).filter(s => s.length > 0);
+
+            // Word frequency analysis (ignoring common stop words)
+            const stopWords = new Set(['the','is','in','at','which','on','a','an','and','or','but','is','are','was','were','to','for','with','of','not','it','this','that','by','from','as','be','have','has','had']);
+            const words = text.toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
+            
+            const freqMap = {};
+            words.forEach(w => {
+                if (!stopWords.has(w)) {
+                    freqMap[w] = (freqMap[w] || 0) + 1;
+                }
+            });
+
+            // Score Sentences
+            const sentenceScores = sentences.map((sentence, idx) => {
+                const sWords = sentence.toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
+                let score = 0;
+                sWords.forEach(w => {
+                    if (freqMap[w]) score += freqMap[w];
+                });
+                return { sentence, score: score / (sWords.length || 1), index: idx };
+            });
+
+            // Rank sentences by score
+            const sortedSentences = [...sentenceScores].sort((a, b) => b.score - a.score);
+
+            // Pick Top 3 for Key Takeaways
+            const topTakeaways = sortedSentences.slice(0, Math.min(3, sentences.length))
+                .sort((a, b) => a.index - b.index)
+                .map(item => item.sentence);
+
+            // Build Executive Summary (Top ranked sentences)
+            const execSummaryText = sortedSentences.slice(0, Math.min(2, sentences.length))
+                .sort((a, b) => a.index - b.index)
+                .map(item => item.sentence)
+                .join(' ');
+
+            // Basic Sentiment Analysis
+            const positiveWords = ['great','good','excellent','positive','awesome','happy','progress','success','achieved','improved','best'];
+            const negativeWords = ['bad','worst','issue','problem','failed','error','difficult','delay','decline','loss','wrong'];
+            
+            let posCount = 0, negCount = 0;
+            words.forEach(w => {
+                if (positiveWords.includes(w)) posCount++;
+                if (negativeWords.includes(w)) negCount++;
+            });
+
+            let sentiment = { label: 'Neutral', icon: 'fa-regular fa-face-smile', color: 'text-ios-blue' };
+            if (posCount > negCount) {
+                sentiment = { label: 'Positive', icon: 'fa-regular fa-face-smile-beam', color: 'text-ios-green' };
+            } else if (negCount > posCount) {
+                sentiment = { label: 'Negative / Critical', icon: 'fa-regular fa-face-frown', color: 'text-ios-red' };
+            }
+
+            // Reading time calculation (~200 wpm)
+            const totalWords = words.length;
+            const readingTime = Math.max(1, Math.ceil(totalWords / 200));
+
+            return {
+                executiveSummary: execSummaryText || text,
+                keyTakeaways: topTakeaways.length ? topTakeaways : [text],
+                sentiment,
+                readingTime
+            };
+        }
+
+        copySummaryBtn.addEventListener('click', () => {
+            const summaryText = `Executive Summary:\n${execSummary.innerText}\n\nKey Takeaways:\n${bulletPoints.innerText}`;
+            copyToClipboard(summaryText);
+            showToast("Summary copied to clipboard!");
+        });
+
+        // --- 8. PWA Modal Controls ---
+        pwaHelpBtn.addEventListener('click', () => pwaModal.classList.remove('hidden'));
+        closePwaModal.addEventListener('click', () => pwaModal.classList.add('hidden'));
+        dismissPwaModal.addEventListener('click', () => pwaModal.classList.add('hidden'));
+    </script>
+</body>
+</html>
